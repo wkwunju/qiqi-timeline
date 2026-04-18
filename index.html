@@ -42,8 +42,10 @@
   .entry { margin-bottom: 7rem; opacity: 0; transform: translateY(20px); transition: opacity 1.2s ease, transform 1.2s ease; position: relative; }
   .entry.visible { opacity: 1; transform: translateY(0); }
   .entry .meta { display: flex; align-items: baseline; gap: 1.5rem; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--line); }
-  .entry .age { font-size: 1.8rem; font-weight: 400; letter-spacing: 0.02em; }
-  .entry .date { font-size: 0.85rem; color: var(--muted); letter-spacing: 0.15em; text-transform: uppercase; margin-left: auto; }
+  .entry .age-group { display: flex; flex-direction: column; gap: 0.3rem; }
+  .entry .age { font-size: 1.8rem; font-weight: 400; letter-spacing: 0.02em; line-height: 1.1; }
+  .entry .age-sub { font-size: 0.9rem; color: var(--muted); font-style: italic; letter-spacing: 0.05em; }
+  .entry .date { font-size: 0.85rem; color: var(--muted); letter-spacing: 0.15em; text-transform: uppercase; margin-left: auto; align-self: flex-end; }
   .entry .photo { width: 100%; background: #efece7; overflow: hidden; margin-bottom: 1.5rem; }
   .entry .photo img { width: 100%; height: auto; display: block; transition: transform 1.5s ease; }
   .entry .photo:hover img { transform: scale(1.02); }
@@ -55,9 +57,16 @@
     cursor: pointer; opacity: 0; transition: opacity 0.3s ease;
     padding: 0.4rem 0.6rem; font-family: inherit;
   }
-  .entry:hover .del { opacity: 0.6; }
+  .entry:hover .del, .entry:hover .edit { opacity: 0.6; }
   .entry .del:hover { opacity: 1; color: #c06060; }
-  body:not(.admin) .del { display: none; }
+  .entry .edit {
+    position: absolute; top: 0; right: 4rem; background: none; border: none;
+    color: var(--muted); font-size: 0.75rem; letter-spacing: 0.15em;
+    cursor: pointer; opacity: 0; transition: opacity 0.3s ease;
+    padding: 0.4rem 0.6rem; font-family: inherit;
+  }
+  .entry .edit:hover { opacity: 1; color: var(--accent); }
+  body:not(.admin) .del, body:not(.admin) .edit { display: none; }
 
   footer { text-align: center; padding: 3rem 2rem 6rem; color: var(--muted); font-size: 0.8rem; letter-spacing: 0.3em; text-transform: uppercase; }
   footer .heart { color: var(--accent); font-style: normal; }
@@ -157,6 +166,28 @@
   </div>
 </div>
 
+<div class="modal-bg" id="edit-modal">
+  <div class="modal">
+    <h2>编辑</h2>
+    <div class="hint">改完点保存,照片不会变。</div>
+
+    <label for="e-date">日期</label>
+    <input type="date" id="e-date">
+
+    <label for="e-age">标签(可选)</label>
+    <input type="text" id="e-age" placeholder="如:满月、百天、周岁...">
+
+    <label for="e-caption">一句话(可选)</label>
+    <textarea id="e-caption"></textarea>
+
+    <div class="err" id="e-err"></div>
+    <div class="actions">
+      <button class="cancel" id="e-cancel">取消</button>
+      <button class="save" id="e-save">保存</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="modal">
   <div class="modal">
     <h2>添加一段记忆</h2>
@@ -191,6 +222,7 @@
   // 部署 Cloudflare Worker 后,把这里改成 Worker 的 URL。
   // 例如:https://qiqi-api.wkwunju.workers.dev
   const API_URL = 'https://qiqi-api.qiqi-baby.workers.dev';
+  const BIRTH_DATE = '2026-03-21'; // 骐骐的生日
 
   // ---------- password (session) ----------
   const PWD_KEY = 'qiqi-pwd';
@@ -212,6 +244,40 @@
     const m = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${y} · ${m} · ${day}`;
+  };
+
+  const ageFromBirth = (dateIso) => {
+    if (!BIRTH_DATE || !dateIso) return null;
+    const birth = new Date(BIRTH_DATE + 'T00:00:00');
+    const d = new Date(dateIso + 'T00:00:00');
+    if (d < birth) return null;
+    const totalDays = Math.round((d - birth) / 86400000);
+
+    let years = d.getFullYear() - birth.getFullYear();
+    let months = d.getMonth() - birth.getMonth();
+    let days = d.getDate() - birth.getDate();
+    if (days < 0) {
+      months--;
+      const prev = new Date(d.getFullYear(), d.getMonth(), 0);
+      days += prev.getDate();
+    }
+    if (months < 0) { years--; months += 12; }
+    return { years, months, days, totalDays };
+  };
+
+  const formatAge = (a) => {
+    if (!a) return '';
+    if (a.totalDays === 0) return '出生那天';
+    if (a.years > 0) {
+      const parts = [`${a.years} 岁`];
+      if (a.months) parts.push(`${a.months} 个月`);
+      if (a.days) parts.push(`${a.days} 天`);
+      return parts.join(' ');
+    }
+    if (a.months > 0) {
+      return a.days ? `${a.months} 个月 ${a.days} 天` : `${a.months} 个月`;
+    }
+    return `${a.totalDays} 天`;
   };
 
   const photoUrl = (name) => `${API_URL}/photos/${encodeURIComponent(name)}`;
@@ -236,17 +302,26 @@
 
       timeline.innerHTML = '';
       entries.forEach(e => {
+        const ageText = formatAge(ageFromBirth(e.date));
+        const headline = e.age || ageText || '&nbsp;';
+        const subline = e.age && ageText ? ageText : '';
+
         const el = document.createElement('article');
         el.className = 'entry';
         el.innerHTML = `
           <div class="meta">
-            <div class="age">${e.age ? escapeHtml(e.age) : '&nbsp;'}</div>
+            <div class="age-group">
+              <div class="age">${e.age ? escapeHtml(headline) : headline}</div>
+              ${subline ? `<div class="age-sub">${escapeHtml(subline)}</div>` : ''}
+            </div>
             <div class="date">${formatDate(e.date)}</div>
           </div>
           <div class="photo"><img src="${escapeHtml(photoUrl(e.photo))}" alt="" loading="lazy"></div>
           ${e.caption ? `<p class="caption">${escapeHtml(e.caption)}</p>` : ''}
+          <button class="edit" data-id="${escapeHtml(e.id)}">编辑</button>
           <button class="del" data-id="${escapeHtml(e.id)}">删除</button>
         `;
+        el._entry = e;
         timeline.appendChild(el);
       });
 
@@ -254,6 +329,13 @@
         items.forEach(i => { if (i.isIntersecting) { i.target.classList.add('visible'); io.unobserve(i.target); } });
       }, { threshold: 0.15 });
       document.querySelectorAll('.entry').forEach(e => io.observe(e));
+
+      document.querySelectorAll('.edit').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const entry = btn.closest('.entry')._entry;
+          openEditModal(entry);
+        });
+      });
 
       document.querySelectorAll('.del').forEach(btn => {
         btn.addEventListener('click', async () => {
@@ -314,6 +396,59 @@
   document.getElementById('btn-signout').addEventListener('click', () => {
     if (!confirm('退出上传模式?')) return;
     clearPwd(); updateAdminUI();
+  });
+
+  // ---------- edit modal ----------
+  const editModal = document.getElementById('edit-modal');
+  const eDate = document.getElementById('e-date');
+  const eAge = document.getElementById('e-age');
+  const eCaption = document.getElementById('e-caption');
+  const eErr = document.getElementById('e-err');
+  const eSave = document.getElementById('e-save');
+  let editingId = null;
+
+  const openEditModal = (entry) => {
+    editingId = entry.id;
+    eDate.value = entry.date || '';
+    eAge.value = entry.age || '';
+    eCaption.value = entry.caption || '';
+    eErr.textContent = '';
+    eSave.disabled = false;
+    eSave.textContent = '保存';
+    editModal.classList.add('open');
+  };
+  const closeEditModal = () => {
+    editModal.classList.remove('open');
+    editingId = null;
+  };
+  document.getElementById('e-cancel').addEventListener('click', closeEditModal);
+  editModal.addEventListener('click', (e) => { if (e.target === editModal) closeEditModal(); });
+
+  eSave.addEventListener('click', async () => {
+    if (!editingId) return;
+    eSave.disabled = true;
+    eSave.textContent = '保存中...';
+    eErr.textContent = '';
+    try {
+      const res = await fetch(`${API_URL}/edit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-password': getPwd() },
+        body: JSON.stringify({
+          id: editingId,
+          date: eDate.value,
+          age: eAge.value.trim(),
+          caption: eCaption.value.trim(),
+        }),
+      });
+      if (res.status === 401) { clearPwd(); updateAdminUI(); eErr.textContent = '密码失效,请重新登录'; eSave.disabled = false; eSave.textContent = '保存'; return; }
+      if (!res.ok) throw new Error(await res.text() || '保存失败');
+      closeEditModal();
+      render();
+    } catch (err) {
+      eErr.textContent = err.message;
+      eSave.disabled = false;
+      eSave.textContent = '保存';
+    }
   });
 
   // ---------- upload modal ----------

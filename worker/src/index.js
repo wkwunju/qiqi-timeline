@@ -98,6 +98,25 @@ export default {
       return json({ ok: true, id });
     }
 
+    // ---- POST /edit ----
+    if (path === '/edit' && request.method === 'POST') {
+      if (!checkAuth(request, env)) return json({ error: 'unauthorized' }, 401);
+      const body = await request.json();
+      const { id, date, age, caption } = body;
+      if (!id) return json({ error: 'missing id' }, 400);
+
+      const manifest = await readManifest(env);
+      const idx = manifest.findIndex((e) => e.id === id);
+      if (idx === -1) return json({ error: 'not found' }, 404);
+
+      if (date !== undefined) manifest[idx].date = String(date);
+      if (age !== undefined) manifest[idx].age = String(age).slice(0, 60);
+      if (caption !== undefined) manifest[idx].caption = String(caption).slice(0, 500);
+
+      await writeManifest(env, manifest);
+      return json({ ok: true });
+    }
+
     // ---- POST /delete ----
     if (path === '/delete' && request.method === 'POST') {
       if (!checkAuth(request, env)) return json({ error: 'unauthorized' }, 401);
