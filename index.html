@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>骐骐 · Qiqi</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500&family=Noto+Serif+SC:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #faf8f5;
+    --ink: #2a2a2a;
+    --muted: #8a8680;
+    --line: #e5e1db;
+    --accent: #b89d7d;
+    --card: #ffffff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: "Cormorant Garamond", "Noto Serif SC", Georgia, serif;
+    font-weight: 300; line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    min-height: 90vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center;
+    padding: 4rem 2rem;
+  }
+  header .name { font-size: clamp(4rem, 14vw, 9rem); font-weight: 300; letter-spacing: 0.02em; line-height: 1; }
+  header .en { font-size: clamp(1rem, 2vw, 1.4rem); letter-spacing: 0.6em; text-transform: uppercase; color: var(--muted); margin-top: 1.5rem; padding-left: 0.6em; }
+  header .dash { width: 1px; height: 60px; background: var(--line); margin: 3rem 0 1rem; }
+  header .sub { font-size: 0.95rem; color: var(--muted); font-style: italic; }
+
+  main { max-width: 820px; margin: 0 auto; padding: 4rem 2rem 8rem; }
+
+  .state { text-align: center; padding: 4rem 1rem; color: var(--muted); font-style: italic; }
+  .state .big { font-size: 1.4rem; margin-bottom: 0.5rem; color: var(--ink); font-style: normal; }
+
+  .entry { margin-bottom: 7rem; opacity: 0; transform: translateY(20px); transition: opacity 1.2s ease, transform 1.2s ease; position: relative; }
+  .entry.visible { opacity: 1; transform: translateY(0); }
+  .entry .meta { display: flex; align-items: baseline; gap: 1.5rem; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--line); }
+  .entry .age { font-size: 1.8rem; font-weight: 400; letter-spacing: 0.02em; }
+  .entry .date { font-size: 0.85rem; color: var(--muted); letter-spacing: 0.15em; text-transform: uppercase; margin-left: auto; }
+  .entry .photo { width: 100%; background: #efece7; overflow: hidden; margin-bottom: 1.5rem; }
+  .entry .photo img { width: 100%; height: auto; display: block; transition: transform 1.5s ease; }
+  .entry .photo:hover img { transform: scale(1.02); }
+  .entry .caption { font-size: 1.05rem; color: #4a4844; font-style: italic; max-width: 90%; }
+
+  .entry .del {
+    position: absolute; top: 0; right: 0; background: none; border: none;
+    color: var(--muted); font-size: 0.75rem; letter-spacing: 0.15em;
+    cursor: pointer; opacity: 0; transition: opacity 0.3s ease;
+    padding: 0.4rem 0.6rem; font-family: inherit;
+  }
+  .entry:hover .del { opacity: 0.6; }
+  .entry .del:hover { opacity: 1; color: #c06060; }
+  body:not(.admin) .del { display: none; }
+
+  footer { text-align: center; padding: 3rem 2rem 6rem; color: var(--muted); font-size: 0.8rem; letter-spacing: 0.3em; text-transform: uppercase; }
+  footer .heart { color: var(--accent); font-style: normal; }
+  footer .signout { margin-top: 1.2rem; display: none; }
+  body.admin footer .signout { display: inline-block; }
+  footer .signout button { background: none; border: none; color: var(--muted); font-family: inherit; letter-spacing: 0.15em; font-size: 0.75rem; cursor: pointer; border-bottom: 1px solid transparent; padding: 0.2rem 0; }
+  footer .signout button:hover { color: var(--ink); border-bottom-color: var(--accent); }
+
+  .fab {
+    position: fixed; right: 2rem; bottom: 2rem; width: 56px; height: 56px;
+    border-radius: 50%; background: var(--ink); color: var(--bg); border: none;
+    font-size: 1.8rem; font-weight: 200; cursor: pointer;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 10;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+    display: flex; align-items: center; justify-content: center; line-height: 1;
+  }
+  .fab:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
+
+  .modal-bg {
+    position: fixed; inset: 0; background: rgba(30, 28, 25, 0.45);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    display: none; align-items: center; justify-content: center;
+    z-index: 100; padding: 1.5rem;
+  }
+  .modal-bg.open { display: flex; }
+  .modal { background: var(--card); width: 100%; max-width: 460px; padding: 2.5rem 2rem; max-height: 90vh; overflow-y: auto; }
+  .modal h2 { font-weight: 400; font-size: 1.6rem; margin-bottom: 0.4rem; }
+  .modal .hint { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.8rem; font-style: italic; }
+  .modal .hint a { color: var(--accent); }
+  .modal label { display: block; font-size: 0.75rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.5rem; margin-top: 1.2rem; }
+  .modal input[type="text"], .modal input[type="date"], .modal input[type="password"], .modal textarea {
+    width: 100%; padding: 0.7rem 0; border: none; border-bottom: 1px solid var(--line);
+    background: transparent; font-family: inherit; font-size: 1rem; color: var(--ink);
+    outline: none; transition: border-color 0.2s;
+  }
+  .modal input:focus, .modal textarea:focus { border-bottom-color: var(--accent); }
+  .modal textarea { resize: vertical; min-height: 60px; }
+
+  .file-drop { margin-top: 0.5rem; border: 1px dashed var(--line); padding: 1.2rem; text-align: center; cursor: pointer; color: var(--muted); font-size: 0.9rem; transition: border-color 0.2s, color 0.2s; }
+  .file-drop:hover { border-color: var(--accent); color: var(--ink); }
+  .file-drop.has-file { color: var(--ink); border-style: solid; }
+  .file-drop input[type="file"] { display: none; }
+
+  .preview { margin-top: 0.8rem; display: none; }
+  .preview img { width: 100%; display: block; max-height: 240px; object-fit: cover; }
+
+  .actions { margin-top: 2.2rem; display: flex; justify-content: flex-end; gap: 1rem; }
+  .actions button { background: none; border: none; font-family: inherit; font-size: 0.9rem; letter-spacing: 0.15em; text-transform: uppercase; padding: 0.7rem 1.2rem; cursor: pointer; transition: all 0.2s; }
+  .actions .cancel { color: var(--muted); }
+  .actions .cancel:hover { color: var(--ink); }
+  .actions .save { background: var(--ink); color: var(--bg); }
+  .actions .save:hover { background: var(--accent); }
+  .actions .save:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .err { color: #c06060; font-size: 0.85rem; margin-top: 0.8rem; min-height: 1.2em; }
+
+  @media (max-width: 600px) {
+    main { padding: 3rem 1.5rem 6rem; }
+    .entry { margin-bottom: 5rem; }
+    .entry .meta { flex-wrap: wrap; gap: 0.5rem; }
+    .entry .date { margin-left: 0; width: 100%; }
+    .fab { right: 1.2rem; bottom: 1.2rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1 class="name">骐骐</h1>
+  <div class="en">Qiqi</div>
+  <div class="dash"></div>
+  <div class="sub">a little timeline</div>
+</header>
+
+<main id="timeline">
+  <div class="state"><div class="big">加载中...</div></div>
+</main>
+
+<footer>
+  made with <span class="heart">♡</span> for qiqi
+  <div class="signout"><button id="btn-signout">退出上传模式</button></div>
+</footer>
+
+<button class="fab" id="btn-add" title="添加照片">+</button>
+
+<!-- token modal -->
+<div class="modal-bg" id="token-modal">
+  <div class="modal">
+    <h2>请输入上传口令</h2>
+    <div class="hint">
+      首次上传需要一个 GitHub 令牌(Personal Access Token)。
+      生成方式见 <a href="https://github.com/settings/personal-access-tokens" target="_blank">这里</a>,
+      仅保存在你自己的浏览器里。
+    </div>
+    <label for="f-token">Token</label>
+    <input type="password" id="f-token" autocomplete="off" autofocus>
+    <div class="err" id="token-err"></div>
+    <div class="actions">
+      <button class="cancel" id="token-cancel">取消</button>
+      <button class="save" id="token-ok">确认</button>
+    </div>
+  </div>
+</div>
+
+<!-- upload modal -->
+<div class="modal-bg" id="modal">
+  <div class="modal">
+    <h2>添加一段记忆</h2>
+    <div class="hint">上传照片,填上时间,就会加入时间线。</div>
+
+    <label for="f-photo">照片</label>
+    <label for="f-photo" class="file-drop" id="file-drop">
+      <input type="file" id="f-photo" accept="image/*">
+      <span id="file-label">点击选择照片</span>
+    </label>
+    <div class="preview" id="preview"><img id="preview-img" alt=""></div>
+
+    <label for="f-date">日期</label>
+    <input type="date" id="f-date">
+
+    <label for="f-age">标签(可选)</label>
+    <input type="text" id="f-age" placeholder="如:满月、百天、周岁...">
+
+    <label for="f-caption">一句话(可选)</label>
+    <textarea id="f-caption" placeholder="记下那一刻的感受"></textarea>
+
+    <div class="err" id="up-err"></div>
+    <div class="actions">
+      <button class="cancel" id="btn-cancel">取消</button>
+      <button class="save" id="btn-save" disabled>保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ---------- config ----------
+  const OWNER = 'wkwunju';
+  const REPO = 'qiqi-timeline';
+  const BRANCH = 'main';
+  const API = 'https://api.github.com';
+  const RAW = `https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}`;
+
+  const photoUrl = (name) => `${RAW}/photos/${name}`;
+
+  // ---------- token storage ----------
+  const TOKEN_KEY = 'qiqi-gh-token';
+  const getToken = () => localStorage.getItem(TOKEN_KEY) || '';
+  const setToken = (t) => localStorage.setItem(TOKEN_KEY, t);
+  const clearToken = () => localStorage.removeItem(TOKEN_KEY);
+  const updateAdminUI = () => document.body.classList.toggle('admin', !!getToken());
+  updateAdminUI();
+
+  // ---------- helpers ----------
+  const escapeHtml = (s) => String(s).replace(/[&<>"']/g, c => (
+    {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
+  ));
+
+  const formatDate = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso + 'T00:00:00');
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y} · ${m} · ${day}`;
+  };
+
+  const blobToBase64 = (blob) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+
+  const api = async (path, init = {}) => {
+    const res = await fetch(`${API}${path}`, {
+      ...init,
+      headers: {
+        'Accept': 'application/vnd.github+json',
+        'Authorization': `Bearer ${getToken()}`,
+        'X-GitHub-Api-Version': '2022-11-28',
+        ...(init.headers || {}),
+      },
+    });
+    return res;
+  };
+
+  // ---------- rendering ----------
+  const timeline = document.getElementById('timeline');
+
+  const loadManifest = async () => {
+    const url = `${RAW}/manifest.json?t=${Date.now()}`;
+    const res = await fetch(url, { cache: 'no-cache' });
+    if (res.status === 404) return [];
+    if (!res.ok) throw new Error('无法加载时间线');
+    return res.json();
+  };
+
+  const render = async () => {
+    try {
+      const entries = (await loadManifest()).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+      if (entries.length === 0) {
+        timeline.innerHTML = `
+          <div class="state">
+            <div class="big">时间线还是空的</div>
+            <div>点右下角的 + 添加第一张照片吧</div>
+          </div>`;
+        return;
+      }
+
+      timeline.innerHTML = '';
+      entries.forEach(e => {
+        const el = document.createElement('article');
+        el.className = 'entry';
+        el.innerHTML = `
+          <div class="meta">
+            <div class="age">${e.age ? escapeHtml(e.age) : '&nbsp;'}</div>
+            <div class="date">${formatDate(e.date)}</div>
+          </div>
+          <div class="photo"><img src="${escapeHtml(photoUrl(e.photo))}" alt="" loading="lazy"></div>
+          ${e.caption ? `<p class="caption">${escapeHtml(e.caption)}</p>` : ''}
+          <button class="del" data-id="${escapeHtml(e.id)}" data-photo="${escapeHtml(e.photo)}">删除</button>
+        `;
+        timeline.appendChild(el);
+      });
+
+      const io = new IntersectionObserver((items) => {
+        items.forEach(i => { if (i.isIntersecting) { i.target.classList.add('visible'); io.unobserve(i.target); } });
+      }, { threshold: 0.15 });
+      document.querySelectorAll('.entry').forEach(e => io.observe(e));
+
+      document.querySelectorAll('.del').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          if (!confirm('删除这条记录?')) return;
+          try {
+            await deleteEntry(btn.dataset.id, btn.dataset.photo);
+            render();
+          } catch (err) { alert('删除失败:' + err.message); }
+        });
+      });
+    } catch (err) {
+      timeline.innerHTML = `<div class="state"><div class="big">加载失败</div><div>${escapeHtml(err.message)}</div></div>`;
+    }
+  };
+
+  // ---------- token modal ----------
+  const tokenModal = document.getElementById('token-modal');
+  const tokenInput = document.getElementById('f-token');
+  const tokenErr = document.getElementById('token-err');
+
+  const askToken = () => new Promise((resolve) => {
+    tokenInput.value = '';
+    tokenErr.textContent = '';
+    tokenModal.classList.add('open');
+    tokenInput.focus();
+
+    const ok = async () => {
+      const val = tokenInput.value.trim();
+      if (!val) { tokenErr.textContent = '请输入 token'; return; }
+      const res = await fetch(`${API}/repos/${OWNER}/${REPO}`, {
+        headers: { 'Authorization': `Bearer ${val}`, 'Accept': 'application/vnd.github+json' },
+      });
+      if (res.ok) {
+        setToken(val); updateAdminUI(); cleanup(); resolve(true);
+      } else {
+        tokenErr.textContent = 'Token 无效或没有该仓库的写权限';
+      }
+    };
+    const cancel = () => { cleanup(); resolve(false); };
+    const cleanup = () => {
+      tokenModal.classList.remove('open');
+      document.getElementById('token-ok').removeEventListener('click', ok);
+      document.getElementById('token-cancel').removeEventListener('click', cancel);
+      tokenInput.removeEventListener('keydown', onKey);
+    };
+    const onKey = (e) => { if (e.key === 'Enter') ok(); if (e.key === 'Escape') cancel(); };
+    document.getElementById('token-ok').addEventListener('click', ok);
+    document.getElementById('token-cancel').addEventListener('click', cancel);
+    tokenInput.addEventListener('keydown', onKey);
+  });
+
+  document.getElementById('btn-signout').addEventListener('click', () => {
+    if (!confirm('退出上传模式?下次上传需要重新输入 token。')) return;
+    clearToken(); updateAdminUI();
+  });
+
+  // ---------- upload modal ----------
+  const modal = document.getElementById('modal');
+  const fPhoto = document.getElementById('f-photo');
+  const fDate = document.getElementById('f-date');
+  const fAge = document.getElementById('f-age');
+  const fCaption = document.getElementById('f-caption');
+  const fileLabel = document.getElementById('file-label');
+  const fileDrop = document.getElementById('file-drop');
+  const preview = document.getElementById('preview');
+  const previewImg = document.getElementById('preview-img');
+  const btnSave = document.getElementById('btn-save');
+  const upErr = document.getElementById('up-err');
+
+  let currentPhotoBlob = null;
+
+  const openUploadModal = () => {
+    modal.classList.add('open');
+    fDate.value = new Date().toISOString().slice(0, 10);
+  };
+  const closeUploadModal = () => {
+    modal.classList.remove('open');
+    fPhoto.value = ''; fDate.value = ''; fAge.value = ''; fCaption.value = '';
+    fileLabel.textContent = '点击选择照片';
+    fileDrop.classList.remove('has-file');
+    preview.style.display = 'none';
+    previewImg.src = '';
+    currentPhotoBlob = null;
+    upErr.textContent = '';
+    btnSave.disabled = true;
+    btnSave.textContent = '保存';
+  };
+
+  document.getElementById('btn-add').addEventListener('click', async () => {
+    if (!getToken()) {
+      const ok = await askToken();
+      if (!ok) return;
+    }
+    openUploadModal();
+  });
+  document.getElementById('btn-cancel').addEventListener('click', closeUploadModal);
+  modal.addEventListener('click', (e) => { if (e.target === modal) closeUploadModal(); });
+
+  // ---------- image resize ----------
+  const resizeImage = (file, maxW = 1600, quality = 0.85) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxW / img.width);
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('压缩失败')), 'image/jpeg', quality);
+      };
+      img.onerror = reject;
+      img.src = ev.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  fPhoto.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    fileLabel.textContent = '处理中...';
+    try {
+      const blob = await resizeImage(file);
+      currentPhotoBlob = blob;
+      previewImg.src = URL.createObjectURL(blob);
+      preview.style.display = 'block';
+      fileDrop.classList.add('has-file');
+      fileLabel.textContent = file.name;
+      btnSave.disabled = false;
+    } catch (err) {
+      upErr.textContent = '照片处理失败:' + err.message;
+      fileLabel.textContent = '点击选择照片';
+    }
+  });
+
+  // ---------- GitHub contents API ----------
+  const getFile = async (path) => {
+    const res = await api(`/repos/${OWNER}/${REPO}/contents/${encodeURIComponent(path)}?ref=${BRANCH}`);
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`读取 ${path} 失败 (${res.status})`);
+    return res.json();
+  };
+
+  const putFile = async (path, contentBase64, message, sha) => {
+    const body = { message, content: contentBase64, branch: BRANCH };
+    if (sha) body.sha = sha;
+    const res = await api(`/repos/${OWNER}/${REPO}/contents/${encodeURIComponent(path)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error(`写入 ${path} 失败: ${t}`);
+    }
+    return res.json();
+  };
+
+  const deleteFile = async (path, sha, message) => {
+    const res = await api(`/repos/${OWNER}/${REPO}/contents/${encodeURIComponent(path)}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, sha, branch: BRANCH }),
+    });
+    if (!res.ok && res.status !== 404) {
+      const t = await res.text();
+      throw new Error(`删除 ${path} 失败: ${t}`);
+    }
+  };
+
+  const utf8ToBase64 = (str) => {
+    const bytes = new TextEncoder().encode(str);
+    let binary = '';
+    for (const b of bytes) binary += String.fromCharCode(b);
+    return btoa(binary);
+  };
+  const base64ToUtf8 = (b64) => {
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  };
+
+  const upload = async (blob, meta) => {
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const filename = `${id}.jpg`;
+
+    // 1. upload photo
+    const photoB64 = await blobToBase64(blob);
+    await putFile(`photos/${filename}`, photoB64, `add photo ${filename}`);
+
+    // 2. update manifest
+    const manifestFile = await getFile('manifest.json');
+    let current = [];
+    let sha = undefined;
+    if (manifestFile) {
+      sha = manifestFile.sha;
+      current = JSON.parse(base64ToUtf8(manifestFile.content.replace(/\n/g, '')));
+    }
+    current.push({
+      id,
+      photo: filename,
+      date: meta.date,
+      age: meta.age,
+      caption: meta.caption,
+      createdAt: new Date().toISOString(),
+    });
+    const newContent = utf8ToBase64(JSON.stringify(current, null, 2));
+    await putFile('manifest.json', newContent, `update manifest (+${id})`, sha);
+  };
+
+  const deleteEntry = async (id, photoFilename) => {
+    // 1. read manifest
+    const manifestFile = await getFile('manifest.json');
+    if (!manifestFile) return;
+    const current = JSON.parse(base64ToUtf8(manifestFile.content.replace(/\n/g, '')));
+    const filtered = current.filter(e => e.id !== id);
+
+    // 2. update manifest
+    const newContent = utf8ToBase64(JSON.stringify(filtered, null, 2));
+    await putFile('manifest.json', newContent, `update manifest (-${id})`, manifestFile.sha);
+
+    // 3. delete photo file
+    const photoFile = await getFile(`photos/${photoFilename}`);
+    if (photoFile) await deleteFile(`photos/${photoFilename}`, photoFile.sha, `remove photo ${photoFilename}`);
+  };
+
+  btnSave.addEventListener('click', async () => {
+    if (!currentPhotoBlob) return;
+    btnSave.disabled = true;
+    btnSave.textContent = '上传中...';
+    upErr.textContent = '';
+    try {
+      await upload(currentPhotoBlob, {
+        date: fDate.value || new Date().toISOString().slice(0, 10),
+        age: fAge.value.trim(),
+        caption: fCaption.value.trim(),
+      });
+      closeUploadModal();
+      // small delay so raw.githubusercontent picks up new commit
+      setTimeout(render, 1500);
+    } catch (err) {
+      upErr.textContent = err.message;
+      btnSave.disabled = false;
+      btnSave.textContent = '保存';
+    }
+  });
+
+  render();
+</script>
+
+</body>
+</html>
