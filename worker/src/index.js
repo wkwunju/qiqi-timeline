@@ -68,26 +68,35 @@ export default {
       if (!checkAuth(request, env)) return json({ error: 'unauthorized' }, 401);
 
       const form = await request.formData();
-      const photo = form.get('photo');
+      const file = form.get('photo');
       const date = form.get('date');
       const age = (form.get('age') || '').toString().slice(0, 60);
       const caption = (form.get('caption') || '').toString().slice(0, 500);
 
-      if (!photo || !date) return json({ error: 'missing fields' }, 400);
-      if (photo.size > 10 * 1024 * 1024) return json({ error: 'photo too large' }, 413);
+      if (!file || !date) return json({ error: 'missing fields' }, 400);
+
+      const contentType = file.type || 'image/jpeg';
+      const isVideo = contentType.startsWith('video/');
+      const maxSize = isVideo ? 90 * 1024 * 1024 : 10 * 1024 * 1024;
+      if (file.size > maxSize) {
+        return json({ error: isVideo ? 'video too large (max 90MB)' : 'photo too large (max 10MB)' }, 413);
+      }
 
       const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-      const filename = `${id}.jpg`;
-      const type = photo.type || 'image/jpeg';
+      const ext = isVideo
+        ? (contentType.split('/')[1] || 'mp4').replace(/[^a-z0-9]/gi, '').toLowerCase()
+        : 'jpg';
+      const filename = `${id}.${ext}`;
 
-      await env.PHOTOS.put(`photos/${filename}`, photo.stream(), {
-        httpMetadata: { contentType: type },
+      await env.PHOTOS.put(`photos/${filename}`, file.stream(), {
+        httpMetadata: { contentType },
       });
 
       const manifest = await readManifest(env);
       manifest.push({
         id,
         photo: filename,
+        type: isVideo ? 'video' : 'image',
         date: date.toString(),
         age,
         caption,

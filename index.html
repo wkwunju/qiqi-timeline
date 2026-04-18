@@ -47,8 +47,9 @@
   .entry .age-sub { font-size: 0.9rem; color: var(--muted); font-style: italic; letter-spacing: 0.05em; }
   .entry .date { font-size: 0.85rem; color: var(--muted); letter-spacing: 0.15em; text-transform: uppercase; margin-left: auto; align-self: flex-end; }
   .entry .photo { width: 100%; background: #efece7; overflow: hidden; margin-bottom: 1.5rem; }
-  .entry .photo img { width: 100%; height: auto; display: block; transition: transform 1.5s ease; }
+  .entry .photo img, .entry .photo video { width: 100%; height: auto; display: block; transition: transform 1.5s ease; }
   .entry .photo:hover img { transform: scale(1.02); }
+  .entry .photo video { background: #1a1a1a; }
   .entry .caption { font-size: 1.05rem; color: #4a4844; font-style: italic; max-width: 90%; }
 
   .entry .actions-row {
@@ -136,7 +137,7 @@
   .file-drop input[type="file"] { display: none; }
 
   .preview { margin-top: 0.8rem; display: none; }
-  .preview img { width: 100%; display: block; max-height: 240px; object-fit: cover; }
+  .preview img, .preview video { width: 100%; display: block; max-height: 240px; object-fit: cover; background: #1a1a1a; }
 
   .actions { margin-top: 2.2rem; display: flex; justify-content: flex-end; gap: 1rem; }
   .actions button { background: none; border: none; font-family: inherit; font-size: 0.9rem; letter-spacing: 0.15em; text-transform: uppercase; padding: 0.7rem 1.2rem; cursor: pointer; transition: all 0.2s; }
@@ -221,12 +222,15 @@
     <h2>添加一段记忆</h2>
     <div class="hint">上传照片,填上时间,就会加入时间线。</div>
 
-    <label for="f-photo">照片</label>
+    <label for="f-photo">照片或视频</label>
     <label for="f-photo" class="file-drop" id="file-drop">
-      <input type="file" id="f-photo" accept="image/*">
-      <span id="file-label">点击选择,或拖拽照片到这里</span>
+      <input type="file" id="f-photo" accept="image/*,video/*">
+      <span id="file-label">点击选择,或拖拽文件到这里</span>
     </label>
-    <div class="preview" id="preview"><img id="preview-img" alt=""></div>
+    <div class="preview" id="preview">
+      <img id="preview-img" alt="" style="display:none">
+      <video id="preview-video" controls playsinline style="display:none"></video>
+    </div>
 
     <label for="f-date">日期</label>
     <input type="date" id="f-date">
@@ -309,6 +313,7 @@
   };
 
   const photoUrl = (name) => `${API_URL}/photos/${encodeURIComponent(name)}`;
+  const isVideoEntry = (e) => e.type === 'video' || /\.(mp4|mov|webm|m4v|ogg|ogv)$/i.test(e.photo || '');
 
   // ---------- rendering ----------
   const timeline = document.getElementById('timeline');
@@ -344,7 +349,9 @@
             </div>
             <div class="date">${formatDate(e.date)}</div>
           </div>
-          <div class="photo"><img src="${escapeHtml(photoUrl(e.photo))}" alt="" loading="lazy"></div>
+          <div class="photo">${isVideoEntry(e)
+            ? `<video src="${escapeHtml(photoUrl(e.photo))}" controls playsinline preload="metadata"></video>`
+            : `<img src="${escapeHtml(photoUrl(e.photo))}" alt="" loading="lazy">`}</div>
           ${e.caption ? `<p class="caption">${escapeHtml(e.caption)}</p>` : ''}
           <div class="actions-row">
             <button class="edit" data-id="${escapeHtml(e.id)}">编辑</button>
@@ -491,10 +498,12 @@
   const fileDrop = document.getElementById('file-drop');
   const preview = document.getElementById('preview');
   const previewImg = document.getElementById('preview-img');
+  const previewVideo = document.getElementById('preview-video');
   const btnSave = document.getElementById('btn-save');
   const upErr = document.getElementById('up-err');
 
   let currentPhotoBlob = null;
+  let currentIsVideo = false;
 
   const openUploadModal = () => {
     modal.classList.add('open');
@@ -503,11 +512,16 @@
   const closeUploadModal = () => {
     modal.classList.remove('open');
     fPhoto.value = ''; fDate.value = ''; fAge.value = ''; fCaption.value = '';
-    fileLabel.textContent = '点击选择,或拖拽照片到这里';
+    fileLabel.textContent = '点击选择,或拖拽文件到这里';
     fileDrop.classList.remove('has-file');
     fileDrop.classList.remove('drag-active');
     preview.style.display = 'none';
+    previewImg.style.display = 'none';
     previewImg.src = '';
+    previewVideo.style.display = 'none';
+    if (previewVideo.src) URL.revokeObjectURL(previewVideo.src);
+    previewVideo.removeAttribute('src');
+    previewVideo.load();
     currentPhotoBlob = null;
     upErr.textContent = '';
     btnSave.disabled = true;
@@ -547,23 +561,41 @@
 
   const handleFile = async (file) => {
     if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      upErr.textContent = '请选择图片文件';
+    const isImage = file.type.startsWith('image/');
+    const isVideo = file.type.startsWith('video/');
+    if (!isImage && !isVideo) {
+      upErr.textContent = '请选择图片或视频文件';
+      return;
+    }
+    if (isVideo && file.size > 90 * 1024 * 1024) {
+      upErr.textContent = `视频过大(${(file.size / 1024 / 1024).toFixed(1)}MB),上限 90MB。请先剪短或降低分辨率。`;
       return;
     }
     upErr.textContent = '';
     fileLabel.textContent = '处理中...';
     try {
-      const blob = await resizeImage(file);
+      let blob;
+      if (isImage) {
+        blob = await resizeImage(file);
+        previewImg.src = URL.createObjectURL(blob);
+        previewImg.style.display = 'block';
+        previewVideo.style.display = 'none';
+      } else {
+        blob = file;
+        const vurl = URL.createObjectURL(blob);
+        previewVideo.src = vurl;
+        previewVideo.style.display = 'block';
+        previewImg.style.display = 'none';
+      }
       currentPhotoBlob = blob;
-      previewImg.src = URL.createObjectURL(blob);
+      currentIsVideo = isVideo;
       preview.style.display = 'block';
       fileDrop.classList.add('has-file');
-      fileLabel.textContent = file.name || 'photo.jpg';
+      fileLabel.textContent = file.name || (isVideo ? 'video.mp4' : 'photo.jpg');
       btnSave.disabled = false;
     } catch (err) {
-      upErr.textContent = '照片处理失败:' + err.message + '(HEIC 格式请先导出为 JPEG)';
-      fileLabel.textContent = '点击选择,或拖拽照片到这里';
+      upErr.textContent = '处理失败:' + err.message + (isImage ? '(HEIC 格式请先导出为 JPEG)' : '');
+      fileLabel.textContent = '点击选择,或拖拽文件到这里';
     }
   };
 
@@ -603,7 +635,8 @@
     upErr.textContent = '';
 
     const form = new FormData();
-    form.append('photo', currentPhotoBlob, 'photo.jpg');
+    const filename = currentIsVideo ? (currentPhotoBlob.name || 'video.mp4') : 'photo.jpg';
+    form.append('photo', currentPhotoBlob, filename);
     form.append('date', fDate.value || new Date().toISOString().slice(0, 10));
     form.append('age', fAge.value.trim());
     form.append('caption', fCaption.value.trim());
