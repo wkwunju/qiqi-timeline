@@ -84,6 +84,32 @@
   }
   .fab:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
 
+  .music-toggle {
+    position: fixed; left: 2rem; bottom: 2rem;
+    width: 44px; height: 44px; border-radius: 50%;
+    background: rgba(250, 248, 245, 0.85);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    border: 1px solid var(--line); color: var(--muted);
+    cursor: pointer; z-index: 10;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem; font-family: inherit;
+    transition: color 0.25s, border-color 0.25s, transform 0.25s;
+  }
+  .music-toggle:hover { color: var(--ink); transform: translateY(-1px); }
+  .music-toggle.playing { color: var(--accent); border-color: var(--accent); }
+  .music-toggle.playing::after {
+    content: ''; position: absolute; inset: -3px; border-radius: 50%;
+    border: 1px solid var(--accent); opacity: 0.4;
+    animation: ring 2.2s ease-out infinite;
+  }
+  @keyframes ring {
+    0% { transform: scale(1); opacity: 0.5; }
+    100% { transform: scale(1.35); opacity: 0; }
+  }
+  @media (max-width: 600px) {
+    .music-toggle { left: 1.2rem; bottom: 1.2rem; width: 40px; height: 40px; }
+  }
+
   .modal-bg {
     position: fixed; inset: 0; background: rgba(30, 28, 25, 0.45);
     backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
@@ -148,6 +174,9 @@
   made with <span class="heart">♡</span> for qiqi
   <div class="signout"><button id="btn-signout">退出上传模式</button></div>
 </footer>
+
+<button class="music-toggle" id="btn-music" title="播放背景音乐" aria-label="播放背景音乐">♪</button>
+<audio id="music" src="lullaby.mp3" loop preload="none"></audio>
 
 <button class="fab" id="btn-add" title="添加照片">+</button>
 
@@ -601,6 +630,26 @@
       upErr.textContent = err.message;
       btnSave.disabled = false;
       btnSave.textContent = '保存';
+    }
+  });
+
+  // ---------- music ----------
+  const music = document.getElementById('music');
+  const musicBtn = document.getElementById('btn-music');
+  music.volume = 0.45;
+  musicBtn.addEventListener('click', async () => {
+    if (music.paused) {
+      try {
+        await music.play();
+        musicBtn.classList.add('playing');
+        musicBtn.textContent = '❙❙';
+        musicBtn.title = '暂停';
+      } catch (err) { /* ignore */ }
+    } else {
+      music.pause();
+      musicBtn.classList.remove('playing');
+      musicBtn.textContent = '♪';
+      musicBtn.title = '播放背景音乐';
     }
   });
 
