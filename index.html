@@ -51,22 +51,21 @@
   .entry .photo:hover img { transform: scale(1.02); }
   .entry .caption { font-size: 1.05rem; color: #4a4844; font-style: italic; max-width: 90%; }
 
-  .entry .del {
-    position: absolute; top: 0; right: 0; background: none; border: none;
-    color: var(--muted); font-size: 0.75rem; letter-spacing: 0.15em;
-    cursor: pointer; opacity: 0; transition: opacity 0.3s ease;
-    padding: 0.4rem 0.6rem; font-family: inherit;
+  .entry .actions-row {
+    display: flex; justify-content: flex-end; gap: 1.5rem;
+    margin-top: 1rem; opacity: 0; transition: opacity 0.3s ease;
   }
-  .entry:hover .del, .entry:hover .edit { opacity: 0.6; }
-  .entry .del:hover { opacity: 1; color: #c06060; }
-  .entry .edit {
-    position: absolute; top: 0; right: 4rem; background: none; border: none;
-    color: var(--muted); font-size: 0.75rem; letter-spacing: 0.15em;
-    cursor: pointer; opacity: 0; transition: opacity 0.3s ease;
-    padding: 0.4rem 0.6rem; font-family: inherit;
+  .entry:hover .actions-row { opacity: 0.6; }
+  .entry .actions-row:hover { opacity: 1; }
+  .entry .actions-row button {
+    background: none; border: none; color: var(--muted);
+    font-size: 0.75rem; letter-spacing: 0.15em;
+    cursor: pointer; padding: 0.2rem 0; font-family: inherit;
+    transition: color 0.2s;
   }
-  .entry .edit:hover { opacity: 1; color: var(--accent); }
-  body:not(.admin) .del, body:not(.admin) .edit { display: none; }
+  .entry .actions-row .edit:hover { color: var(--accent); }
+  .entry .actions-row .del:hover { color: #c06060; }
+  body:not(.admin) .actions-row { display: none; }
 
   footer { text-align: center; padding: 3rem 2rem 6rem; color: var(--muted); font-size: 0.8rem; letter-spacing: 0.3em; text-transform: uppercase; }
   footer .heart { color: var(--accent); font-style: normal; }
@@ -318,8 +317,10 @@
           </div>
           <div class="photo"><img src="${escapeHtml(photoUrl(e.photo))}" alt="" loading="lazy"></div>
           ${e.caption ? `<p class="caption">${escapeHtml(e.caption)}</p>` : ''}
-          <button class="edit" data-id="${escapeHtml(e.id)}">编辑</button>
-          <button class="del" data-id="${escapeHtml(e.id)}">删除</button>
+          <div class="actions-row">
+            <button class="edit" data-id="${escapeHtml(e.id)}">编辑</button>
+            <button class="del" data-id="${escapeHtml(e.id)}">删除</button>
+          </div>
         `;
         el._entry = e;
         timeline.appendChild(el);
