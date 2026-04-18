@@ -86,7 +86,6 @@
   .modal { background: var(--card); width: 100%; max-width: 460px; padding: 2.5rem 2rem; max-height: 90vh; overflow-y: auto; }
   .modal h2 { font-weight: 400; font-size: 1.6rem; margin-bottom: 0.4rem; }
   .modal .hint { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.8rem; font-style: italic; }
-  .modal .hint a { color: var(--accent); }
   .modal label { display: block; font-size: 0.75rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.5rem; margin-top: 1.2rem; }
   .modal input[type="text"], .modal input[type="date"], .modal input[type="password"], .modal textarea {
     width: 100%; padding: 0.7rem 0; border: none; border-bottom: 1px solid var(--line);
@@ -143,26 +142,20 @@
 
 <button class="fab" id="btn-add" title="添加照片">+</button>
 
-<!-- token modal -->
-<div class="modal-bg" id="token-modal">
+<div class="modal-bg" id="pwd-modal">
   <div class="modal">
-    <h2>请输入上传口令</h2>
-    <div class="hint">
-      首次上传需要一个 GitHub 令牌(Personal Access Token)。
-      生成方式见 <a href="https://github.com/settings/personal-access-tokens" target="_blank">这里</a>,
-      仅保存在你自己的浏览器里。
-    </div>
-    <label for="f-token">Token</label>
-    <input type="password" id="f-token" autocomplete="off" autofocus>
-    <div class="err" id="token-err"></div>
+    <h2>请先输入密码</h2>
+    <div class="hint">只有知道密码的人才能上传或删除。</div>
+    <label for="f-pwd">密码</label>
+    <input type="password" id="f-pwd" autofocus>
+    <div class="err" id="pwd-err"></div>
     <div class="actions">
-      <button class="cancel" id="token-cancel">取消</button>
-      <button class="save" id="token-ok">确认</button>
+      <button class="cancel" id="pwd-cancel">取消</button>
+      <button class="save" id="pwd-ok">确认</button>
     </div>
   </div>
 </div>
 
-<!-- upload modal -->
 <div class="modal-bg" id="modal">
   <div class="modal">
     <h2>添加一段记忆</h2>
@@ -194,20 +187,16 @@
 
 <script>
   // ---------- config ----------
-  const OWNER = 'wkwunju';
-  const REPO = 'qiqi-timeline';
-  const BRANCH = 'main';
-  const API = 'https://api.github.com';
-  const RAW = `https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}`;
+  // 部署 Cloudflare Worker 后,把这里改成 Worker 的 URL。
+  // 例如:https://qiqi-api.wkwunju.workers.dev
+  const API_URL = 'https://qiqi-api.wkwunju.workers.dev';
 
-  const photoUrl = (name) => `${RAW}/photos/${name}`;
-
-  // ---------- token storage ----------
-  const TOKEN_KEY = 'qiqi-gh-token';
-  const getToken = () => localStorage.getItem(TOKEN_KEY) || '';
-  const setToken = (t) => localStorage.setItem(TOKEN_KEY, t);
-  const clearToken = () => localStorage.removeItem(TOKEN_KEY);
-  const updateAdminUI = () => document.body.classList.toggle('admin', !!getToken());
+  // ---------- password (session) ----------
+  const PWD_KEY = 'qiqi-pwd';
+  const getPwd = () => sessionStorage.getItem(PWD_KEY) || '';
+  const setPwd = (p) => sessionStorage.setItem(PWD_KEY, p);
+  const clearPwd = () => sessionStorage.removeItem(PWD_KEY);
+  const updateAdminUI = () => document.body.classList.toggle('admin', !!getPwd());
   updateAdminUI();
 
   // ---------- helpers ----------
@@ -224,40 +213,16 @@
     return `${y} · ${m} · ${day}`;
   };
 
-  const blobToBase64 = (blob) => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result.split(',')[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-
-  const api = async (path, init = {}) => {
-    const res = await fetch(`${API}${path}`, {
-      ...init,
-      headers: {
-        'Accept': 'application/vnd.github+json',
-        'Authorization': `Bearer ${getToken()}`,
-        'X-GitHub-Api-Version': '2022-11-28',
-        ...(init.headers || {}),
-      },
-    });
-    return res;
-  };
+  const photoUrl = (name) => `${API_URL}/photos/${encodeURIComponent(name)}`;
 
   // ---------- rendering ----------
   const timeline = document.getElementById('timeline');
 
-  const loadManifest = async () => {
-    const url = `${RAW}/manifest.json?t=${Date.now()}`;
-    const res = await fetch(url, { cache: 'no-cache' });
-    if (res.status === 404) return [];
-    if (!res.ok) throw new Error('无法加载时间线');
-    return res.json();
-  };
-
   const render = async () => {
     try {
-      const entries = (await loadManifest()).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+      const res = await fetch(`${API_URL}/manifest`, { cache: 'no-cache' });
+      if (!res.ok) throw new Error('无法加载时间线');
+      const entries = (await res.json()).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
       if (entries.length === 0) {
         timeline.innerHTML = `
@@ -279,7 +244,7 @@
           </div>
           <div class="photo"><img src="${escapeHtml(photoUrl(e.photo))}" alt="" loading="lazy"></div>
           ${e.caption ? `<p class="caption">${escapeHtml(e.caption)}</p>` : ''}
-          <button class="del" data-id="${escapeHtml(e.id)}" data-photo="${escapeHtml(e.photo)}">删除</button>
+          <button class="del" data-id="${escapeHtml(e.id)}">删除</button>
         `;
         timeline.appendChild(el);
       });
@@ -292,10 +257,15 @@
       document.querySelectorAll('.del').forEach(btn => {
         btn.addEventListener('click', async () => {
           if (!confirm('删除这条记录?')) return;
-          try {
-            await deleteEntry(btn.dataset.id, btn.dataset.photo);
-            render();
-          } catch (err) { alert('删除失败:' + err.message); }
+          const id = btn.dataset.id;
+          const res = await fetch(`${API_URL}/delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-password': getPwd() },
+            body: JSON.stringify({ id }),
+          });
+          if (res.status === 401) { clearPwd(); updateAdminUI(); alert('密码无效,请重新输入'); return; }
+          if (!res.ok) { alert('删除失败'); return; }
+          render();
         });
       });
     } catch (err) {
@@ -303,45 +273,46 @@
     }
   };
 
-  // ---------- token modal ----------
-  const tokenModal = document.getElementById('token-modal');
-  const tokenInput = document.getElementById('f-token');
-  const tokenErr = document.getElementById('token-err');
+  // ---------- password modal ----------
+  const pwdModal = document.getElementById('pwd-modal');
+  const pwdInput = document.getElementById('f-pwd');
+  const pwdErr = document.getElementById('pwd-err');
 
-  const askToken = () => new Promise((resolve) => {
-    tokenInput.value = '';
-    tokenErr.textContent = '';
-    tokenModal.classList.add('open');
-    tokenInput.focus();
+  const askPassword = () => new Promise((resolve) => {
+    pwdInput.value = '';
+    pwdErr.textContent = '';
+    pwdModal.classList.add('open');
+    pwdInput.focus();
 
     const ok = async () => {
-      const val = tokenInput.value.trim();
-      if (!val) { tokenErr.textContent = '请输入 token'; return; }
-      const res = await fetch(`${API}/repos/${OWNER}/${REPO}`, {
-        headers: { 'Authorization': `Bearer ${val}`, 'Accept': 'application/vnd.github+json' },
+      const val = pwdInput.value.trim();
+      if (!val) { pwdErr.textContent = '请输入密码'; return; }
+      const res = await fetch(`${API_URL}/verify`, {
+        method: 'POST',
+        headers: { 'x-password': val },
       });
       if (res.ok) {
-        setToken(val); updateAdminUI(); cleanup(); resolve(true);
+        setPwd(val); updateAdminUI(); cleanup(); resolve(true);
       } else {
-        tokenErr.textContent = 'Token 无效或没有该仓库的写权限';
+        pwdErr.textContent = '密码不对';
       }
     };
     const cancel = () => { cleanup(); resolve(false); };
     const cleanup = () => {
-      tokenModal.classList.remove('open');
-      document.getElementById('token-ok').removeEventListener('click', ok);
-      document.getElementById('token-cancel').removeEventListener('click', cancel);
-      tokenInput.removeEventListener('keydown', onKey);
+      pwdModal.classList.remove('open');
+      document.getElementById('pwd-ok').removeEventListener('click', ok);
+      document.getElementById('pwd-cancel').removeEventListener('click', cancel);
+      pwdInput.removeEventListener('keydown', onKey);
     };
     const onKey = (e) => { if (e.key === 'Enter') ok(); if (e.key === 'Escape') cancel(); };
-    document.getElementById('token-ok').addEventListener('click', ok);
-    document.getElementById('token-cancel').addEventListener('click', cancel);
-    tokenInput.addEventListener('keydown', onKey);
+    document.getElementById('pwd-ok').addEventListener('click', ok);
+    document.getElementById('pwd-cancel').addEventListener('click', cancel);
+    pwdInput.addEventListener('keydown', onKey);
   });
 
   document.getElementById('btn-signout').addEventListener('click', () => {
-    if (!confirm('退出上传模式?下次上传需要重新输入 token。')) return;
-    clearToken(); updateAdminUI();
+    if (!confirm('退出上传模式?')) return;
+    clearPwd(); updateAdminUI();
   });
 
   // ---------- upload modal ----------
@@ -377,8 +348,8 @@
   };
 
   document.getElementById('btn-add').addEventListener('click', async () => {
-    if (!getToken()) {
-      const ok = await askToken();
+    if (!getPwd()) {
+      const ok = await askPassword();
       if (!ok) return;
     }
     openUploadModal();
@@ -386,7 +357,7 @@
   document.getElementById('btn-cancel').addEventListener('click', closeUploadModal);
   modal.addEventListener('click', (e) => { if (e.target === modal) closeUploadModal(); });
 
-  // ---------- image resize ----------
+  // ---------- resize ----------
   const resizeImage = (file, maxW = 1600, quality = 0.85) => new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (ev) => {
@@ -425,112 +396,36 @@
     }
   });
 
-  // ---------- GitHub contents API ----------
-  const getFile = async (path) => {
-    const res = await api(`/repos/${OWNER}/${REPO}/contents/${encodeURIComponent(path)}?ref=${BRANCH}`);
-    if (res.status === 404) return null;
-    if (!res.ok) throw new Error(`读取 ${path} 失败 (${res.status})`);
-    return res.json();
-  };
-
-  const putFile = async (path, contentBase64, message, sha) => {
-    const body = { message, content: contentBase64, branch: BRANCH };
-    if (sha) body.sha = sha;
-    const res = await api(`/repos/${OWNER}/${REPO}/contents/${encodeURIComponent(path)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      const t = await res.text();
-      throw new Error(`写入 ${path} 失败: ${t}`);
-    }
-    return res.json();
-  };
-
-  const deleteFile = async (path, sha, message) => {
-    const res = await api(`/repos/${OWNER}/${REPO}/contents/${encodeURIComponent(path)}`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, sha, branch: BRANCH }),
-    });
-    if (!res.ok && res.status !== 404) {
-      const t = await res.text();
-      throw new Error(`删除 ${path} 失败: ${t}`);
-    }
-  };
-
-  const utf8ToBase64 = (str) => {
-    const bytes = new TextEncoder().encode(str);
-    let binary = '';
-    for (const b of bytes) binary += String.fromCharCode(b);
-    return btoa(binary);
-  };
-  const base64ToUtf8 = (b64) => {
-    const binary = atob(b64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    return new TextDecoder().decode(bytes);
-  };
-
-  const upload = async (blob, meta) => {
-    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-    const filename = `${id}.jpg`;
-
-    // 1. upload photo
-    const photoB64 = await blobToBase64(blob);
-    await putFile(`photos/${filename}`, photoB64, `add photo ${filename}`);
-
-    // 2. update manifest
-    const manifestFile = await getFile('manifest.json');
-    let current = [];
-    let sha = undefined;
-    if (manifestFile) {
-      sha = manifestFile.sha;
-      current = JSON.parse(base64ToUtf8(manifestFile.content.replace(/\n/g, '')));
-    }
-    current.push({
-      id,
-      photo: filename,
-      date: meta.date,
-      age: meta.age,
-      caption: meta.caption,
-      createdAt: new Date().toISOString(),
-    });
-    const newContent = utf8ToBase64(JSON.stringify(current, null, 2));
-    await putFile('manifest.json', newContent, `update manifest (+${id})`, sha);
-  };
-
-  const deleteEntry = async (id, photoFilename) => {
-    // 1. read manifest
-    const manifestFile = await getFile('manifest.json');
-    if (!manifestFile) return;
-    const current = JSON.parse(base64ToUtf8(manifestFile.content.replace(/\n/g, '')));
-    const filtered = current.filter(e => e.id !== id);
-
-    // 2. update manifest
-    const newContent = utf8ToBase64(JSON.stringify(filtered, null, 2));
-    await putFile('manifest.json', newContent, `update manifest (-${id})`, manifestFile.sha);
-
-    // 3. delete photo file
-    const photoFile = await getFile(`photos/${photoFilename}`);
-    if (photoFile) await deleteFile(`photos/${photoFilename}`, photoFile.sha, `remove photo ${photoFilename}`);
-  };
-
   btnSave.addEventListener('click', async () => {
     if (!currentPhotoBlob) return;
     btnSave.disabled = true;
     btnSave.textContent = '上传中...';
     upErr.textContent = '';
+
+    const form = new FormData();
+    form.append('photo', currentPhotoBlob, 'photo.jpg');
+    form.append('date', fDate.value || new Date().toISOString().slice(0, 10));
+    form.append('age', fAge.value.trim());
+    form.append('caption', fCaption.value.trim());
+
     try {
-      await upload(currentPhotoBlob, {
-        date: fDate.value || new Date().toISOString().slice(0, 10),
-        age: fAge.value.trim(),
-        caption: fCaption.value.trim(),
+      const res = await fetch(`${API_URL}/upload`, {
+        method: 'POST',
+        headers: { 'x-password': getPwd() },
+        body: form,
       });
+      if (res.status === 401) {
+        clearPwd(); updateAdminUI();
+        upErr.textContent = '密码无效,请关闭后重新上传。';
+        btnSave.disabled = false; btnSave.textContent = '保存';
+        return;
+      }
+      if (!res.ok) {
+        const t = await res.text();
+        throw new Error(t || '上传失败');
+      }
       closeUploadModal();
-      // small delay so raw.githubusercontent picks up new commit
-      setTimeout(render, 1500);
+      render();
     } catch (err) {
       upErr.textContent = err.message;
       btnSave.disabled = false;
