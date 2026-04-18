@@ -95,9 +95,10 @@
   .modal input:focus, .modal textarea:focus { border-bottom-color: var(--accent); }
   .modal textarea { resize: vertical; min-height: 60px; }
 
-  .file-drop { margin-top: 0.5rem; border: 1px dashed var(--line); padding: 1.2rem; text-align: center; cursor: pointer; color: var(--muted); font-size: 0.9rem; transition: border-color 0.2s, color 0.2s; }
+  .file-drop { margin-top: 0.5rem; border: 1px dashed var(--line); padding: 1.2rem; text-align: center; cursor: pointer; color: var(--muted); font-size: 0.9rem; transition: border-color 0.2s, color 0.2s, background 0.2s; }
   .file-drop:hover { border-color: var(--accent); color: var(--ink); }
   .file-drop.has-file { color: var(--ink); border-style: solid; }
+  .file-drop.drag-active { border-color: var(--accent); color: var(--ink); background: #f3ede4; border-style: solid; }
   .file-drop input[type="file"] { display: none; }
 
   .preview { margin-top: 0.8rem; display: none; }
@@ -164,7 +165,7 @@
     <label for="f-photo">照片</label>
     <label for="f-photo" class="file-drop" id="file-drop">
       <input type="file" id="f-photo" accept="image/*">
-      <span id="file-label">点击选择照片</span>
+      <span id="file-label">点击选择,或拖拽照片到这里</span>
     </label>
     <div class="preview" id="preview"><img id="preview-img" alt=""></div>
 
@@ -337,8 +338,9 @@
   const closeUploadModal = () => {
     modal.classList.remove('open');
     fPhoto.value = ''; fDate.value = ''; fAge.value = ''; fCaption.value = '';
-    fileLabel.textContent = '点击选择照片';
+    fileLabel.textContent = '点击选择,或拖拽照片到这里';
     fileDrop.classList.remove('has-file');
+    fileDrop.classList.remove('drag-active');
     preview.style.display = 'none';
     previewImg.src = '';
     currentPhotoBlob = null;
@@ -378,9 +380,13 @@
     reader.readAsDataURL(file);
   });
 
-  fPhoto.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
+  const handleFile = async (file) => {
     if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      upErr.textContent = '请选择图片文件';
+      return;
+    }
+    upErr.textContent = '';
     fileLabel.textContent = '处理中...';
     try {
       const blob = await resizeImage(file);
@@ -388,12 +394,41 @@
       previewImg.src = URL.createObjectURL(blob);
       preview.style.display = 'block';
       fileDrop.classList.add('has-file');
-      fileLabel.textContent = file.name;
+      fileLabel.textContent = file.name || 'photo.jpg';
       btnSave.disabled = false;
     } catch (err) {
-      upErr.textContent = '照片处理失败:' + err.message;
-      fileLabel.textContent = '点击选择照片';
+      upErr.textContent = '照片处理失败:' + err.message + '(HEIC 格式请先导出为 JPEG)';
+      fileLabel.textContent = '点击选择,或拖拽照片到这里';
     }
+  };
+
+  fPhoto.addEventListener('change', (e) => handleFile(e.target.files[0]));
+
+  // drag + drop
+  ['dragenter', 'dragover'].forEach(ev => {
+    fileDrop.addEventListener(ev, (e) => {
+      e.preventDefault(); e.stopPropagation();
+      fileDrop.classList.add('drag-active');
+    });
+  });
+  ['dragleave', 'dragend'].forEach(ev => {
+    fileDrop.addEventListener(ev, (e) => {
+      e.preventDefault(); e.stopPropagation();
+      fileDrop.classList.remove('drag-active');
+    });
+  });
+  fileDrop.addEventListener('drop', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    fileDrop.classList.remove('drag-active');
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleFile(file);
+  });
+
+  // prevent the whole page from opening a dropped image
+  ['dragover', 'drop'].forEach(ev => {
+    window.addEventListener(ev, (e) => {
+      if (!fileDrop.contains(e.target)) e.preventDefault();
+    });
   });
 
   btnSave.addEventListener('click', async () => {
